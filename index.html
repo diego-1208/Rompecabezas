@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rompecabezas</title>
+  <!-- Fuentes de Google similares a las del diseño original -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,400&family=Dancing+Script:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-cream: #f9f6f0;
+      --red-main: #c80815;
+      --red-dark: #9e050f;
+      --pink-soft: #ffd6e0;
+      --pink-flower: #ffb3c6;
+      --text-dark: #2c1e1e;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-cream);
+      font-family: 'Playfair Display', serif;
+      color: var(--text-dark);
+      position: relative;
+    }
+
+    /* Fondo cuadriculado sutil con viñeta cálida para la escena de letras y fotos */
+    .grid-bg {
+      background-color: var(--bg-cream);
+      background-image: 
+        radial-gradient(circle at center, rgba(255, 209, 220, 0.35) 0%, rgba(249, 246, 240, 0) 68%),
+        linear-gradient(to right, rgba(200, 8, 21, 0.055) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(200, 8, 21, 0.055) 1px, transparent 1px);
+      background-size: 100% 100%, 36px 36px, 36px 36px;
+    }
+
+    /* Botón de audio superior derecho */
+    #audio-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.15);
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    #audio-btn:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    /* Corazón pequeño que sigue al cursor */
+    #cursor-heart {
+      position: fixed;
+      width: 12px;
+      height: 12px;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: transform 0.08s ease-out;
+    }
+
+    /* ================= ESCENA 1: ROMPECABEZAS ================= */
+    #puzzle-scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 20px;
+      transition: opacity 0.6s ease;
+      z-index: 10;
+    }
+
+    .header-text {
+      text-align: center;
+      transition: opacity 0.5s ease;
+    }
+
+    .header-text .happy {
+      font-family: 'Dancing Script', cursive;
+      font-size: 1.35rem;
+      color: #8c7a7a;
+      margin-bottom: -4px;
+    }
+
+    .header-text .title-banner {
+      display: inline-block;
+      background: radial-gradient(ellipse at center, #ffd1dc 0%, rgba(255, 209, 220, 0.5) 70%, transparent 100%);
+      padding: 4px 26px;
+      border-radius: 30px;
+      color: var(--red-main);
+      font-weight: 700;
+      font-size: 1.7rem;
+      letter-spacing: 0.5px;
+    }
+
+    .header-text .subtitle {
+      margin-top: 8px;
+      font-size: 1.05rem;
+      color: #3a2a2a;
+    }
+
+    /* Tablero central 2x2 */
+    #board-wrapper {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #puzzle-grid {
+      width: 200px;
+      height: 200px;
+      border: 1.5px solid #d8d0c5;
+      background: rgba(255, 255, 255, 0.35);
+      position: relative;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+      transition: border-color 0.5s, background 0.5s, box-shadow 0.5s;
+    }
+
+    #puzzle-grid.completed {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    #grid-lines {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      transition: opacity 0.4s;
+    }
+
+    /* Piezas arrastrables */
+    .puzzle-piece {
+      position: absolute;
+      width: 200px;
+      height: 200px;
+      cursor: grab;
+      filter: drop-shadow(2px 4px 6px rgba(0, 0, 0, 0.18));
+      touch-action: none;
+      z-index: 20;
+      transition: transform 0.25s ease, filter 0.3s ease;
+    }
+
+    .puzzle-piece.dragging {
+      cursor: grabbing;
+      z-index: 50;
+      transition: none;
+      filter: drop-shadow(4px 8px 12px rgba(0, 0, 0, 0.25));
+    }
+
+    .puzzle-piece.locked {
+      pointer-events: none;
+      z-index: 15;
+      filter: drop-shadow(0px 0px 0px rgba(0,0,0,0));
+    }
+
+    /* Ondas rosas al completar el corazón */
+    .pulse-ring {
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,140,165,0.45) 0%, rgba(255,182,193,0.2) 60%, transparent 75%);
+      pointer-events: none;
+      transform: scale(0.5);
+      opacity: 0;
+      z-index: 5;
+    }
+
+    .pulse-ring.animate {
+      animation: pulseExpand 1.8s ease-out forwards;
+    }
+
+    @keyframes pulseExpand {
+      0% { transform: scale(0.5); opacity: 0.9; }
+      100% { transform: scale(3.2); opacity: 0; }
+    }
+
+    .footer-hint {
+      font-size: 0.8rem;
+      color: #aaa095;
+      letter-spacing: 0.4px;
+      transition: opacity 0.4s;
+    }
+
+    /* ================= CAPA DE FLORES (TRANSICIÓN PANTALLA COMPLETA) ================= */
+    #flowers-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 200;
+      overflow: hidden;
+    }
+
+    #flower-backdrop {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle, #ffd6e0 0%, #ffb3c6 100%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 195;
+      transition: opacity 0.45s ease;
+    }
+
+    .flower {
+      position: absolute;
+      width: 135px;
+      height: 135px;
+      transform: translate(-50%, -50%) scale(0);
+      opacity: 0;
+      filter: drop-shadow(0 4px 10px rgba(201, 24, 74, 0.18));
+      transition: transform 0.85s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.55s ease;
+    }
+
+    /* ================= ESCENA 2: LETRA, FOTOS Y CARTA ================= */
+    #story-scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+      z-index: 30;
+    }
+
+    #story-scene.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Marco decorativo romántico en la escena de la canción */
+    .romantic-frame {
+      position: absolute;
+      inset: 18px;
+      border: 1.5px dashed rgba(200, 8, 21, 0.18);
+      border-radius: 18px;
+      pointer-events: none;
+      z-index: 32;
+    }
+
+    .corner-badge {
+      position: absolute;
+      color: var(--red-main);
+      opacity: 0.35;
+      font-size: 1.2rem;
+    }
+    .corner-badge.tl { top: 10px; left: 14px; }
+    .corner-badge.tr { top: 10px; right: 14px; }
+    .corner-badge.bl { bottom: 10px; left: 14px; }
+    .corner-badge.br { bottom: 10px; right: 14px; }
+
+    /* Decoraciones flotantes (corazones, flores, notas y brillos) */
+    .decor-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 33;
+    }
+
+    .floating-item {
+      position: absolute;
+      animation: floatBob 3.2s ease-in-out infinite alternate;
+    }
+
+    @keyframes floatBob {
+      0% { transform: translateY(0px) rotate(-6deg) scale(1); }
+      100% { transform: translateY(-14px) rotate(8deg) scale(1.08); }
+    }
+
+    /* Pétalos cayendo continuamente en el fondo */
+    .falling-petal {
+      position: absolute;
+      top: -30px;
+      pointer-events: none;
+      opacity: 0.75;
+      animation: petalFall linear infinite;
+    }
+
+    @keyframes petalFall {
+      0% {
+        transform: translateY(-30px) translateX(0) rotate(0deg);
+        opacity: 0;
+      }
+      15% {
+        opacity: 0.8;
+      }
+      85% {
+        opacity: 0.8;
+      }
+      100% {
+        transform: translateY(105vh) translateX(60px) rotate(360deg);
+        opacity: 0;
+      }
+    }
+
+    /* Contenedor de palabras de la canción */
+    #lyrics-box {
+      text-align: center;
+      max-width: 82%;
+      font-size: clamp(2.1rem, 5.2vw, 3.4rem);
+      color: #1f1414;
+      line-height: 1.3;
+      min-height: 100px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 0.32em;
+      z-index: 40;
+      padding: 20px 30px;
+      text-shadow: 0 2px 14px rgba(255, 179, 198, 0.5);
+    }
+
+    .lyric-word {
+      display: inline-block;
+      opacity: 0;
+      transform: translateY(12px) scale(0.94);
+      animation: wordAppear 0.38s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+    }
+
+    @keyframes wordAppear {
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* Contenedor de fotos Polaroid */
+    #polaroids-container {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      z-index: 45;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+      flex-wrap: wrap;
+      padding: 16px;
+    }
+
+    #polaroids-container.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .polaroid-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      opacity: 0;
+      transform: translateY(25px) scale(0.9);
+      transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .polaroid-wrap.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .polaroid-card {
+      background: #fff;
+      padding: 10px 10px 26px 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      border: 1px solid #eee;
+      width: 165px;
+    }
+
+    .polaroid-card img {
+      width: 100%;
+      height: 165px;
+      object-fit: cover;
+      display: block;
+      background: #f2e6e6;
+    }
+
+    .polaroid-caption {
+      margin-top: 10px;
+      font-size: 1.25rem;
+      color: var(--red-main);
+      font-weight: 600;
+    }
+
+    .polaroid-caption.top {
+      margin-top: 0;
+      margin-bottom: 10px;
+      color: #2b1d1d;
+    }
+
+    .tilt-left { transform: rotate(-6deg); }
+    .tilt-center { transform: rotate(2deg) translateY(8px); }
+    .tilt-right { transform: rotate(6deg); }
+
+    /* ================= SECCIÓN DEL SOBRE Y LA CARTA ================= */
+    #letter-section {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 60;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.7s ease;
+      padding: 20px;
+    }
+
+    #letter-section.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .envelope-prompt {
+      font-family: 'Dancing Script', cursive;
+      font-size: 1.7rem;
+      color: var(--red-main);
+      margin-bottom: 22px;
+      text-align: center;
+      animation: pulseText 1.6s ease-in-out infinite alternate;
+      transition: opacity 0.4s ease;
+    }
+
+    @keyframes pulseText {
+      from { transform: scale(0.97); opacity: 0.8; }
+      to { transform: scale(1.03); opacity: 1; }
+    }
+
+    /* Contenedor del sobre interactivo */
+    #envelope-wrapper {
+      position: relative;
+      width: 280px;
+      height: 185px;
+      cursor: pointer;
+      perspective: 1000px;
+      transition: transform 0.4s ease, opacity 0.5s ease;
+    }
+
+    #envelope-wrapper:hover {
+      transform: translateY(-5px) scale(1.02);
+    }
+
+    /* Cuerpo trasero del sobre */
+    .envelope-back {
+      position: absolute;
+      inset: 0;
+      background: #e63956;
+      border-radius: 0 0 10px 10px;
+      box-shadow: 0 14px 32px rgba(200, 8, 21, 0.25);
+    }
+
+    /* Hoja previa dentro del sobre */
+    .envelope-paper-preview {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: 12px;
+      bottom: 10px;
+      background: #fffdf9;
+      border-radius: 6px;
+      z-index: 2;
+      transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+      display: flex;
+       flex-direction: column;
+      align-items: center;
+      padding-top: 18px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .envelope-paper-preview .mini-title {
+      font-family: 'Dancing Script', cursive;
+      color: var(--red-main);
+      font-size: 1.3rem;
+    }
+
+    /* Bolsillo frontal del sobre */
+    .envelope-front {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    /* Solapa superior del sobre */
+    .envelope-flap {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 105px;
+      z-index: 4;
+      transform-origin: top;
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), z-index 0.2s 0.3s;
+    }
+
+    /* Sello de corazón en el centro del sobre */
+    .wax-seal {
+      position: absolute;
+      top: 82px;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 42px;
+      height: 42px;
+      background: #9e050f;
+      border-radius: 50%;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+      border: 2px solid #f4a261;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    /* Estado cuando el sobre se abre */
+    #envelope-wrapper.open .envelope-flap {
+      transform: rotateX(180deg);
+      z-index: 1;
+    }
+
+    #envelope-wrapper.open .wax-seal {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.5);
+    }
+
+    #envelope-wrapper.open .envelope-paper-preview {
+      transform: translateY(-75px);
+    }
+
+    /* Tarjeta de la carta abierta para leer */
+    #full-letter-modal {
+      position: absolute;
+      max-width: 460px;
+      width: 92%;
+      max-height: 82vh;
+      background: #fffdf9;
+      border-radius: 14px;
+      padding: 28px 26px 24px 26px;
+      box-shadow: 0 18px 45px rgba(158, 5, 15, 0.18);
+      border: 1.5px solid #ffd6e0;
+      z-index: 70;
+      opacity: 0;
+      transform: translateY(35px) scale(0.9);
+      pointer-events: none;
+      transition: all 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #full-letter-modal.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .letter-content {
+      width: 100%;
+      overflow-y: auto;
+      padding-right: 6px;
+      text-align: left;
+      line-height: 1.65;
+      font-size: 1rem;
+      color: #3a2626;
+      background-image: linear-gradient(transparent 95%, rgba(200, 8, 21, 0.08) 95%);
+      background-size: 100% 1.65rem;
+    }
+
+    .letter-content h3 {
+      font-family: 'Dancing Script', cursive;
+      font-size: 1.9rem;
+      color: var(--red-main);
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .letter-content p {
+      margin-bottom: 12px;
+    }
+
+    .letter-signature {
+      font-family: 'Dancing Script', cursive;
+      font-size: 1.5rem;
+      color: var(--red-main);
+      text-align: right;
+      margin-top: 8px;
+    }
+
+    /* Botón de reiniciar todo */
+    #restart-btn {
+      margin-top: 18px;
+      background: var(--red-main);
+      color: #fff;
+      border: none;
+      padding: 10px 26px;
+      border-radius: 30px;
+      font-family: 'Playfair Display', serif;
+      font-size: 0.98rem;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(200, 8, 21, 0.3);
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    #restart-btn:hover {
+      background: var(--red-dark);
+      transform: scale(1.05);
+    }
+
+    @media (max-width: 600px) {
+      .polaroid-card { width: 115px; padding: 6px 6px 16px 6px; }
+      .polaroid-card img { height: 115px; }
+      #polaroids-container { gap: 12px; }
+      .header-text .title-banner { font-size: 1.35rem; }
+      #full-letter-modal { padding: 22px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Audio (Coloca tu archivo "cancion.mp3" en la misma carpeta) -->
+  <audio id="bg-music" src="cancion.mp3" preload="auto"></audio>
+
+  <!-- Botón de Pausa / Reproducir -->
+  <button id="audio-btn" title="Pausar / Reproducir música">❚❚</button>
+
+  <!-- Pequeño corazón que acompaña al cursor -->
+  <svg id="cursor-heart" viewBox="0 0 24 24" fill="#c80815">
+    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+  </svg>
+
+  <!-- Definiciones SVG de las 4 piezas del rompecabezas que forman un corazón -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <!-- Gradiente para corazones 3D flotantes -->
+      <radialGradient id="glossy-heart" cx="35%" cy="30%" r="70%">
+        <stop offset="0%" stop-color="#ff758f" />
+        <stop offset="45%" stop-color="#d90429" />
+        <stop offset="100%" stop-color="#800f2f" />
+      </radialGradient>
+
+      <!-- Forma global del corazón en un lienzo de 200x200 -->
+      <path id="full-heart" d="M 100,48 C 100,22 65,10 40,22 C 12,35 12,75 35,105 C 55,132 100,168 100,182 C 100,168 145,132 165,105 C 188,75 188,35 160,22 C 135,10 100,22 100,48 Z" />
+
+      <!-- Recorte Pieza 0 (Arriba Izquierda) -->
+      <clipPath id="clip-p0">
+        <path d="M 0,0 H 100 V 42 C 115,42 115,66 100,66 V 100 H 68 C 68,85 44,85 44,100 H 0 Z" />
+      </clipPath>
+
+      <!-- Recorte Pieza 1 (Arriba Derecha) -->
+      <clipPath id="clip-p1">
+        <path d="M 100,0 H 200 V 100 H 156 C 156,115 132,115 132,100 H 100 V 66 C 115,66 115,42 100,42 Z" />
+      </clipPath>
+
+      <!-- Recorte Pieza 2 (Abajo Izquierda) -->
+      <clipPath id="clip-p2">
+        <path d="M 0,100 H 44 C 44,85 68,85 68,100 H 100 V 125 C 85,125 85,149 100,149 V 200 H 0 Z" />
+      </clipPath>
+
+      <!-- Recorte Pieza 3 (Abajo Derecha) -->
+      <clipPath id="clip-p3">
+        <path d="M 100,100 H 132 C 132,115 156,115 156,100 H 200 V 200 H 100 V 149 C 85,149 85,125 100,125 Z" />
+      </clipPath>
+    </defs>
+  </svg>
+
+  <!-- ================= ESCENA 1: ROMPECABEZAS ================= -->
+  <section id="puzzle-scene">
+    <div class="header-text" id="puzzle-header">
+      <div class="happy">Hola Mi amor</div>
+      <div class="title-banner">Es algo pequeño pero con amor ❤️</div>
+      <div class="subtitle">Arma el corazón</div>
+    </div>
+
+    <div id="board-wrapper">
+      <div class="pulse-ring" id="ring1"></div>
+      <div class="pulse-ring" id="ring2" style="animation-delay: 0.35s"></div>
+
+      <div id="puzzle-grid">
+        <!-- Líneas punteadas internas del tablero -->
+        <svg id="grid-lines" viewBox="0 0 200 200" width="200" height="200">
+          <path d="M 100,0 V 42 C 115,42 115,66 100,66 V 125 C 85,125 85,149 100,149 V 200" 
+                fill="none" stroke="#b8b0a4" stroke-width="1.3" stroke-dasharray="3,3"/>
+          <path d="M 0,100 H 44 C 44,85 68,85 68,100 H 132 C 132,115 156,115 156,100 H 200" 
+                fill="none" stroke="#b8b0a4" stroke-width="1.3" stroke-dasharray="3,3"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="footer-hint" id="puzzle-footer">arrastra cada pieza a su lugar</div>
+  </section>
+
+  <!-- ================= CAPA DE FLORES (PANTALLA COMPLETA) ================= -->
+  <div id="flower-backdrop"></div>
+  <div id="flowers-container"></div>
+
+  <!-- ================= ESCENA 2: LETRA, POLAROIDS Y CARTA ================= -->
+  <section id="story-scene" class="grid-bg">
+    <!-- Marco decorativo en las esquinas -->
+    <div class="romantic-frame">
+      <span class="corner-badge tl">❦</span>
+      <span class="corner-badge tr">❦</span>
+      <span class="corner-badge bl">❦</span>
+      <span class="corner-badge br">❦</span>
+    </div>
+
+    <!-- Corazones, flores, pétalos y brillos decorativos alrededor -->
+    <div class="decor-layer" id="decor-layer"></div>
+
+    <!-- Texto sincronizado de la canción -->
+    <div id="lyrics-box"></div>
+
+    <!-- SECCIÓN DE FOTOS POLAROID -->
+    <div id="polaroids-container">
+      <div class="polaroid-wrap tilt-left" id="pol-1">
+        <div class="polaroid-card">
+          <img src="Foto1.jpg" alt="Foto 1">
+        </div>
+        <div class="polaroid-caption">MY GIRL</div>
+      </div>
+
+      <div class="polaroid-wrap tilt-center" id="pol-2">
+        <div class="polaroid-caption top">MY GIRL</div>
+        <div class="polaroid-card">
+          <img src="Foto2.jpg" alt="Foto 2">
+        </div>
+      </div>
+
+      <div class="polaroid-wrap tilt-right" id="pol-3">
+        <div class="polaroid-card">
+          <img src="Foto3.jpg" alt="Foto 3">
+        </div>
+        <div class="polaroid-caption">MYYY GIRLLLL</div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN FINAL: SOBRE Y CARTA INTERACTIVA -->
+    <div id="letter-section">
+      <div class="envelope-prompt" id="envelope-prompt">Por ultimo queria hacerte una pequeña carta 💌</div>
+
+      <!-- Sobre cerrado -->
+      <div id="envelope-wrapper" title="Haz clic para abrir tu carta">
+        <div class="envelope-back"></div>
+
+        <div class="envelope-paper-preview">
+          <span class="mini-title">Para mi niña ❤️</span>
+        </div>
+
+        <!-- Bolsillo frontal en SVG -->
+        <svg class="envelope-front" viewBox="0 0 280 185" preserveAspectRatio="none">
+          <polygon points="0,0 140,100 0,185" fill="#f25c78"/>
+          <polygon points="280,0 140,100 280,185" fill="#eb4967"/>
+          <polygon points="0,185 140,95 280,185" fill="#ff758f"/>
+        </svg>
+
+        <!-- Solapa superior en SVG -->
+        <svg class="envelope-flap" viewBox="0 0 280 105" preserveAspectRatio="none">
+          <polygon points="0,0 280,0 140,102" fill="#d90429"/>
+        </svg>
+
+        <!-- Sello de cera con corazón -->
+        <div class="wax-seal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffd6e0">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Carta desplegada al abrir el sobre -->
+      <div id="full-letter-modal">
+        <div class="letter-content">
+          <h3>Para mi monita linda ❤️</h3> 
+
+<p>
+  Querida monita, sé que últimamente hemos tenido días muy malos, pero también sé que vamos a salir de esto por el amor que nos tenemos, porque cuando estamos juntos somos los más felices del mundo y no hay nada que me haga sentir mejor que estar a tu lado.
+</p>
+<p>
+  Además de eso, quiero decirte que me encanta mirarte, admirarte y saber que tengo la suerte de compartir mis días contigo. Nunca me cansaré de decirte que eres la mujer más increíble y hermosa que existe. Gracias por mirarme de la manera en que lo haces, por regalarme tu sonrisa y tu ternura, y sobre todo, por hacerme tan feliz. Me haces sentir mil emociones diferentes y me encanta que seas tú quien me haga sentir todo eso. Contigo quiero hacer todo lo que nunca haz hecho y hacer cosas nuevas que no conocias.
+</p>
+<p>
+  Te amo muchísimo mi niña linda, y siempre será así. Nada ni nadie va a quitarte el lugar que tienes en mi corazón. ❤️
+</p>
+
+          <div class="letter-signature">Con amor, tu pachon ❤️</div>
+        </div>
+
+        <button id="restart-btn">Volver a empezar ↻</button>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    /* =========================================================================
+       1. CONFIGURACIÓN DE LA LETRA SINCRONIZADA Y TIEMPOS
+       ========================================================================= */
+    const lyricsTimeline = [
+     {
+        time: 2,
+        words: [
+          { text: "You", delay: 0 },
+          { text: "look", delay: 350 },
+          { text: "so", delay: 700 },
+          { text: "pretty", delay: 1050 },
+          { text: "and", delay: 1500 },
+          { text: "I", delay: 1750 },
+          { text: "love", delay: 2100 },
+          { text: "this", delay: 2450 },
+          { text: "view", delay: 2800 }
+        ]
+      },
+      {
+        time: 8.2,
+        words: [
+          { text: "We", delay: 0 },
+          { text: "fell", delay: 400 },
+          { text: "in", delay: 800 },
+          { text: "love", delay: 1150 },
+          { text: "in", delay: 1600 },
+          { text: "October", delay: 2050 }
+        ]
+      },
+      {
+        time: 13,
+        words: [
+          { text: "That's", delay: 0 },
+          { text: "why,", delay: 550 },
+          { text: "I", delay: 1450 },
+          { text: "love", delay: 1850 },
+          { text: "fall", delay: 2350 }
+        ]
+      },
+      {
+        time: 17.5,
+        words: [
+          { text: "Looking", delay: 0 },
+          { text: "at", delay: 550 },
+          { text: "the", delay: 950 },
+          { text: "stars", delay: 1400 }
+        ]
+      },
+      {
+        time: 21,
+        words: [
+          { text: "Admiring", delay: 0 },
+          { text: "from", delay: 750 },
+          { text: "afar", delay: 1350 }
+        ]
+      }
+    ];
+
+    const POLAROIDS_START_TIME = 24.5; // Segundo en que aparecen las fotos Polaroid
+    const LETTER_START_TIME = 37.0;    // Segundo en que aparece el sobre con la carta
+    /* =========================================================================
+       2. CREACIÓN Y LÓGICA DEL ROMPECABEZAS
+       ========================================================================= */
+    const boardWrapper = document.getElementById('board-wrapper');
+    const puzzleGrid = document.getElementById('puzzle-grid');
+    const gridLines = document.getElementById('grid-lines');
+    const puzzleHeader = document.getElementById('puzzle-header');
+    const puzzleFooter = document.getElementById('puzzle-footer');
+    const audio = document.getElementById('bg-music');
+    const audioBtn = document.getElementById('audio-btn');
+
+    let lockedCount = 0;
+    let pieceElements = [];
+
+    const initialOffsets = [
+      { x: -165, y: -70, rot: -12 }, // Pieza 0 (Arriba Izquierda)
+      { x: 165,  y: -55, rot: 14 },  // Pieza 1 (Arriba Derecha)
+      { x: -155, y: 75,  rot: 10 },  // Pieza 2 (Abajo Izquierda)
+      { x: 165,  y: 80,  rot: -8 }   // Pieza 3 (Abajo Derecha)
+    ];
+
+    function createPuzzlePieces() {
+      pieceElements.forEach(el => el.remove());
+      pieceElements = [];
+      lockedCount = 0;
+
+      puzzleGrid.classList.remove('completed');
+      gridLines.style.opacity = '1';
+      puzzleHeader.style.opacity = '1';
+      puzzleFooter.style.opacity = '1';
+      document.getElementById('ring1').classList.remove('animate');
+      document.getElementById('ring2').classList.remove('animate');
+
+      for (let i = 0; i < 4; i++) {
+        const piece = document.createElement('div');
+        piece.classList.add('puzzle-piece');
+        piece.dataset.index = i;
+
+        const miniHeart = i === 2 
+          ? `<path d="M 62,126 C 62,123 57,121 54,123 C 51,125 51,130 54,133 C 57,136 62,140 62,142 C 62,140 67,136 70,133 C 73,130 73,125 70,123 C 67,121 62,123 62,126 Z" 
+                   fill="none" stroke="#ffccd5" stroke-width="1.5" clip-path="url(#clip-p2)"/>`
+          : '';
+
+        piece.innerHTML = `
+          <svg viewBox="0 0 200 200" width="200" height="200">
+            <use href="#full-heart" fill="#c80815" clip-path="url(#clip-p${i})" />
+            ${miniHeart}
+          </svg>
+        `;
+
+        const offset = initialOffsets[i];
+        piece.dataset.x = offset.x;
+        piece.dataset.y = offset.y;
+        piece.dataset.rot = offset.rot;
+        piece.style.transform = `translate(${offset.x}px, ${offset.y}px) rotate(${offset.rot}deg)`;
+
+        makeDraggable(piece);
+        boardWrapper.appendChild(piece);
+        pieceElements.push(piece);
+      }
+    }
+
+    function makeDraggable(el) {
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let currentX = parseFloat(el.dataset.x);
+      let currentY = parseFloat(el.dataset.y);
+
+      const onPointerDown = (e) => {
+        if (el.classList.contains('locked')) return;
+        isDragging = true;
+        el.classList.add('dragging');
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX - currentX;
+        startY = clientY - currentY;
+      };
+
+      const onPointerMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        currentX = clientX - startX;
+        currentY = clientY - startY;
+        el.style.transform = `translate(${currentX}px, ${currentY}px) rotate(0deg)`;
+      };
+
+      const onPointerUp = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        el.classList.remove('dragging');
+
+        const distance = Math.hypot(currentX, currentY);
+        if (distance < 55) {
+          currentX = 0;
+          currentY = 0;
+          el.style.transform = `translate(0px, 0px) rotate(0deg)`;
+          el.classList.add('locked');
+          lockedCount++;
+
+          if (lockedCount === 4) {
+            onPuzzleComplete();
+          }
+        } else {
+          el.dataset.x = currentX;
+          el.dataset.y = currentY;
+        }
+      };
+
+      el.addEventListener('mousedown', onPointerDown);
+      window.addEventListener('mousemove', onPointerMove, { passive: false });
+      window.addEventListener('mouseup', onPointerUp);
+
+      el.addEventListener('touchstart', onPointerDown, { passive: true });
+      window.addEventListener('touchmove', onPointerMove, { passive: false });
+      window.addEventListener('touchend', onPointerUp);
+    }
+
+    /* =========================================================================
+       3. SECUENCIA DE ANIMACIÓN AL COMPLETAR EL ROMPECABEZAS
+       ========================================================================= */
+    function onPuzzleComplete() {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+
+      puzzleGrid.classList.add('completed');
+      gridLines.style.opacity = '0';
+      puzzleHeader.style.opacity = '0';
+      puzzleFooter.style.opacity = '0';
+
+      setTimeout(() => {
+        document.getElementById('ring1').classList.add('animate');
+        document.getElementById('ring2').classList.add('animate');
+      }, 400);
+
+      setTimeout(() => {
+        triggerFlowerBloom(() => {
+          document.getElementById('puzzle-scene').style.opacity = '0';
+          document.getElementById('story-scene').classList.add('active');
+        });
+      }, 1600);
+
+      startStoryTimeline();
+    }
+
+    /* =========================================================================
+       4. GENERADOR DE FLORES DE CEREZO (CUBRE TODA LA PANTALLA)
+       ========================================================================= */
+    const flowersContainer = document.getElementById('flowers-container');
+    const flowerBackdrop = document.getElementById('flower-backdrop');
+
+    function createFlowerSVG(color1, color2) {
+      return `
+        <svg viewBox="0 0 100 100" width="100%" height="100%">
+          <g transform="translate(50,50)">
+            ${[0, 72, 144, 216, 288].map(angle => `
+              <path d="M 0,0 C -18,-22 -22,-44 0,-46 C 22,-44 18,-22 0,0" 
+                    fill="${color1}" transform="rotate(${angle})" />
+            `).join('')}
+            <circle cx="0" cy="0" r="9" fill="${color2}" />
+          </g>
+        </svg>
+      `;
+    }
+
+    function triggerFlowerBloom(onScreenCovered) {
+      flowersContainer.innerHTML = '';
+      const flowers = [];
+      const palettes = [
+        ['#ffb3c6', '#e63956'],
+        ['#ffc2d1', '#ff758f'],
+        ['#ff8fab', '#c9184a'],
+        ['#ffe5ec', '#ff8fab'],
+        ['#ffccd5', '#d90429']
+      ];
+
+      // 1. Crear una cuadrícula densa (10x9 = 90 flores) + 55 flores aleatorias = 145 flores grandes
+      const coords = [];
+      const cols = 10;
+      const rows = 9;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          coords.push({
+            x: (c / (cols - 1)) * 104 - 2 + (Math.random() * 6 - 3),
+            y: (r / (rows - 1)) * 104 - 2 + (Math.random() * 6 - 3)
+          });
+        }
+      }
+      for (let i = 0; i < 55; i++) {
+        coords.push({ x: Math.random() * 100, y: Math.random() * 100 });
+      }
+
+      coords.forEach((pos, i) => {
+        const f = document.createElement('div');
+        f.classList.add('flower');
+        const [c1, c2] = palettes[i % palettes.length];
+        f.innerHTML = createFlowerSVG(c1, c2);
+
+        const scale = 1.15 + Math.random() * 1.45;
+        const rot = Math.random() * 360;
+
+        f.style.left = `${pos.x}%`;
+        f.style.top = `${pos.y}%`;
+        flowersContainer.appendChild(f);
+        flowers.push({ el: f, x: pos.x, y: pos.y, scale, rot });
+
+        const distFromCenter = Math.hypot(pos.x - 50, pos.y - 50);
+        setTimeout(() => {
+          f.style.opacity = '1';
+          f.style.transform = `translate(-50%, -50%) scale(${scale}) rotate(${rot}deg)`;
+        }, distFromCenter * 9);
+      });
+
+      // Velo rosa suave para garantizar que no quede ni un pixel sin cubrir
+      setTimeout(() => {
+        flowerBackdrop.style.opacity = '1';
+      }, 650);
+
+      // Ejecutar cambio de escena cuando las flores cubren toda la pantalla
+      setTimeout(() => {
+        if (onScreenCovered) onScreenCovered();
+      }, 1150);
+
+      // Abrir las flores desde el centro hacia los bordes y desvanecerlas
+      setTimeout(() => {
+        flowerBackdrop.style.opacity = '0';
+        flowers.forEach(({ el, x, y, scale, rot }) => {
+          const angle = Math.atan2(y - 50, x - 50);
+          const pushX = Math.cos(angle) * 240;
+          const pushY = Math.sin(angle) * 240;
+          el.style.transform = `translate(calc(-50% + ${pushX}px), calc(-50% + ${pushY}px)) scale(${scale * 0.75}) rotate(${rot + 55}deg)`;
+          el.style.opacity = '0';
+        });
+      }, 1750);
+    }
+
+    /* =========================================================================
+       5. DECORACIONES ENRIQUECIDAS Y SINCRONIZACIÓN DE LETRAS / FOTOS / CARTA
+       ========================================================================= */
+    function createFloatingDecorations() {
+      const decorLayer = document.getElementById('decor-layer');
+
+      // Elementos flotantes distribuidos por toda la pantalla
+      const items = [
+        // Corazones grandes y medianos con efecto 3D
+        { x: '6%',  y: '14%', size: 46, type: 'heart3d' },
+        { x: '89%', y: '16%', size: 50, type: 'heart3d' },
+        { x: '10%', y: '78%', size: 38, type: 'heart3d' },
+        { x: '86%', y: '76%', size: 42, type: 'heart3d' },
+        { x: '4%',  y: '46%', size: 30, type: 'heart3d' },
+        { x: '92%', y: '48%', size: 34, type: 'heart3d' },
+        { x: '26%', y: '86%', size: 26, type: 'heart3d' },
+        { x: '72%', y: '10%', size: 28, type: 'heart3d' },
+
+        // Flores de cerezo flotantes
+        { x: '16%', y: '26%', size: 36, type: 'blossom' },
+        { x: '80%', y: '28%', size: 34, type: 'blossom' },
+        { x: '18%', y: '66%', size: 32, type: 'blossom' },
+        { x: '78%', y: '68%', size: 38, type: 'blossom' },
+        { x: '48%', y: '10%', size: 30, type: 'blossom' },
+        { x: '52%', y: '88%', size: 34, type: 'blossom' },
+
+        // Destellos / estrellas rojas
+        { x: '22%', y: '12%', size: 22, type: 'star' },
+        { x: '76%', y: '18%', size: 18, type: 'star' },
+        { x: '12%', y: '36%', size: 20, type: 'star' },
+        { x: '88%', y: '36%', size: 24, type: 'star' },
+        { x: '68%', y: '84%', size: 20, type: 'star' },
+        { x: '32%', y: '18%', size: 16, type: 'star' },
+        { x: '34%', y: '78%', size: 18, type: 'star' },
+        { x: '64%', y: '22%', size: 15, type: 'star' },
+
+        // Notas musicales románticas
+        { x: '28%', y: '30%', size: 22, type: 'note' },
+        { x: '70%', y: '74%', size: 22, type: 'note' }
+      ];
+
+      const fixedItemsHTML = items.map((item, idx) => {
+        let svg = '';
+        if (item.type === 'heart3d') {
+          svg = `<svg width="${item.size}" height="${item.size}" viewBox="0 0 24 24" fill="url(#glossy-heart)" style="filter: drop-shadow(0 4px 8px rgba(200,8,21,0.22))">
+                   <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                 </svg>`;
+        } else if (item.type === 'blossom') {
+          svg = `<div style="width:${item.size}px; height:${item.size}px">${createFlowerSVG('#ffb3c6', '#e63956')}</div>`;
+        } else if (item.type === 'note') {
+          svg = `<svg width="${item.size}" height="${item.size}" viewBox="0 0 24 24" fill="#e63956" opacity="0.65">
+                   <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                 </svg>`;
+        } else {
+          svg = `<svg width="${item.size}" height="${item.size}" viewBox="0 0 24 24" fill="#c80815">
+                   <path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5 Z"/>
+                 </svg>`;
+        }
+        return `<div class="floating-item" style="left:${item.x}; top:${item.y}; animation-delay:${(idx * 0.22).toFixed(2)}s">${svg}</div>`;
+      }).join('');
+
+      // Lluvia suave de 18 pétalos rosas cayendo continuamente
+      let petalsHTML = '';
+      for (let p = 0; p < 18; p++) {
+        const left = Math.random() * 96;
+        const size = 14 + Math.random() * 12;
+        const duration = 6 + Math.random() * 6;
+        const delay = Math.random() * 5;
+        petalsHTML += `
+          <div class="falling-petal" style="left:${left}%; width:${size}px; height:${size}px; animation-duration:${duration}s; animation-delay:${delay}s">
+            <svg viewBox="0 0 30 30" width="100%" height="100%">
+              <path d="M15,2 C6,10 6,22 15,28 C24,22 24,10 15,2 Z" fill="#ffb3c6" opacity="0.85"/>
+            </svg>
+          </div>
+        `;
+      }
+
+      decorLayer.innerHTML = fixedItemsHTML + petalsHTML;
+    }
+
+    let scheduledTimeouts = [];
+
+    function clearScheduledTimeouts() {
+      scheduledTimeouts.forEach(t => clearTimeout(t));
+      scheduledTimeouts = [];
+    }
+
+    const lyricsBox = document.getElementById('lyrics-box');
+    const polaroidsContainer = document.getElementById('polaroids-container');
+    const letterSection = document.getElementById('letter-section');
+    const envelopeWrapper = document.getElementById('envelope-wrapper');
+    const envelopePrompt = document.getElementById('envelope-prompt');
+    const fullLetterModal = document.getElementById('full-letter-modal');
+    const restartBtn = document.getElementById('restart-btn');
+
+    function resetLetterState() {
+      letterSection.classList.remove('show');
+      envelopeWrapper.classList.remove('open');
+      envelopeWrapper.style.opacity = '1';
+      envelopeWrapper.style.pointerEvents = 'auto';
+      envelopePrompt.style.opacity = '1';
+      fullLetterModal.classList.remove('visible');
+    }
+
+    function startStoryTimeline() {
+      clearScheduledTimeouts();
+      lyricsBox.innerHTML = '';
+      polaroidsContainer.classList.remove('show');
+      ['pol-1', 'pol-2', 'pol-3'].forEach(id => document.getElementById(id).classList.remove('visible'));
+      resetLetterState();
+
+      // 1. Programar cada línea y palabra de la canción
+      lyricsTimeline.forEach(line => {
+        const lineTimer = setTimeout(() => {
+          lyricsBox.innerHTML = '';
+          line.words.forEach(wordObj => {
+            const wordTimer = setTimeout(() => {
+              const span = document.createElement('span');
+              span.classList.add('lyric-word');
+              span.textContent = wordObj.text;
+              lyricsBox.appendChild(span);
+            }, wordObj.delay);
+            scheduledTimeouts.push(wordTimer);
+          });
+        }, line.time * 1000);
+        scheduledTimeouts.push(lineTimer);
+      });
+
+      // 2. Mostrar las 3 fotos Polaroid
+      const polaroidTimer = setTimeout(() => {
+        lyricsBox.innerHTML = '';
+        polaroidsContainer.classList.add('show');
+        setTimeout(() => document.getElementById('pol-1').classList.add('visible'), 150);
+        setTimeout(() => document.getElementById('pol-2').classList.add('visible'), 550);
+        setTimeout(() => document.getElementById('pol-3').classList.add('visible'), 950);
+      }, POLAROIDS_START_TIME * 1000);
+      scheduledTimeouts.push(polaroidTimer);
+
+      // 3. Al terminar las Polaroids, mostrar el sobre interactivo con la carta
+      const letterTimer = setTimeout(() => {
+        polaroidsContainer.classList.remove('show');
+        letterSection.classList.add('show');
+      }, LETTER_START_TIME * 1000);
+      scheduledTimeouts.push(letterTimer);
+    }
+
+    /* =========================================================================
+       6. INTERACCIÓN DEL SOBRE Y BOTÓN DE REINICIAR
+       ========================================================================= */
+    envelopeWrapper.addEventListener('click', () => {
+      if (envelopeWrapper.classList.contains('open')) return;
+      envelopeWrapper.classList.add('open');
+      envelopePrompt.style.opacity = '0';
+
+      // Mostrar la carta completa después de que se abre la solapa del sobre
+      setTimeout(() => {
+        envelopeWrapper.style.opacity = '0';
+        envelopeWrapper.style.pointerEvents = 'none';
+        fullLetterModal.classList.add('visible');
+      }, 700);
+    });
+
+    restartBtn.addEventListener('click', () => {
+      clearScheduledTimeouts();
+      audio.pause();
+      audio.currentTime = 0;
+
+      // Transición de flores a pantalla completa para volver al rompecabezas
+      triggerFlowerBloom(() => {
+        document.getElementById('story-scene').classList.remove('active');
+        polaroidsContainer.classList.remove('show');
+        resetLetterState();
+        document.getElementById('puzzle-scene').style.opacity = '1';
+        createPuzzlePieces();
+      });
+    });
+
+    /* =========================================================================
+       7. EVENTOS GENERALES (CURSOR Y BOTÓN DE AUDIO)
+       ========================================================================= */
+    const cursorHeart = document.getElementById('cursor-heart');
+    window.addEventListener('mousemove', (e) => {
+      cursorHeart.style.left = `${e.clientX + 10}px`;
+      cursorHeart.style.top = `${e.clientY + 10}px`;
+    });
+
+    audioBtn.addEventListener('click', () => {
+      if (audio.paused) {
+        audio.play().catch(() => {});
+        audioBtn.textContent = '❚❚';
+      } else {
+        audio.pause();
+        audioBtn.textContent = '▶';
+      }
+    });
+
+    // Inicializar al cargar la página
+    createFloatingDecorations();
+    createPuzzlePieces();
+  </script>
+</body>
+</html>
